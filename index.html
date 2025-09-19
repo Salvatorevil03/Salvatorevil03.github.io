@@ -1,75 +1,74 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="it">
 <head>
-  <meta charset="utf-8">
-  <title>PDF + Immagine (client)</title>
+  <meta charset="UTF-8">
+  <title>PDF Merger</title>
   <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.14.305/pdf.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
 </head>
 <body>
-  <h2>Carica un PDFF e un’immagine</h2>
-
-  <p>
-    <label>PDF:
-      <input type="file" id="pdfFile" accept="application/pdf">
-    </label>
-  </p>
-
-  <p>
-    <label>Immagine:
-      <input type="file" id="imgFile" accept="image/*">
-    </label>
-  </p>
-
-  <button id="processBtn">Elabora</button>
-  <br><br>
-  <a id="downloadLink" style="display:none;">Scarica il nuovo PDF</a>
+  <h2>Genera PsDF</h2>
+  <label>PDF base: <input type="file" id="base" accept="application/pdf"></label><br><br>
+  <label>PDF immagini: <input type="file" id="imgs" accept="application/pdf"></label><br><br>
+  <button onclick="process()">Crea PDF</button>
 
   <script>
-    const pdfInput = document.getElementById('pdfFile');
-    const imgInput = document.getElementById('imgFile');
-    const processBtn = document.getElementById('processBtn');
-    const downloadLink = document.getElementById('downloadLink');
+    async function process() {
+    const baseFile = document.getElementById('base').files[0];
+    const imgFile  = document.getElementById('imgs').files[0];
+    if (!baseFile || !imgFile) return alert("Carica entrambi i file");
 
-    processBtn.addEventListener('click', async () => {
-      if (!pdfInput.files[0] || !imgInput.files[0]) {
-        alert("Seleziona sia il PDF che l'immagine.");
-        return;
-      }
+    const baseBytes = await baseFile.arrayBuffer();
+    const basePdf = await PDFLib.PDFDocument.load(baseBytes);
+    const finalPdf = await PDFLib.PDFDocument.create();
 
-      const pdfBytes = await pdfInput.files[0].arrayBuffer();
-      const imgBytes = await imgInput.files[0].arrayBuffer();
+    // Estrazione immagini dal PDF immagini
+    const pdfImg = await pdfjsLib.getDocument({url: URL.createObjectURL(imgFile)}).promise;
+    const images = [];
+    for (let i = 1; i <= pdfImg.numPages; i++) {
+        const page = await pdfImg.getPage(i);
+        const viewport = page.getViewport({scale: 2});
+        const canvas = document.createElement('canvas');
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        await page.render({canvasContext: canvas.getContext('2d'), viewport}).promise;
+        images.push(canvas.toDataURL());
+    }
 
-      const pdfDoc = await PDFLib.PDFDocument.load(pdfBytes);
-      const firstPage = pdfDoc.getPage(0);
+    // Per ogni 3 immagini, crea una pagina e mettile in verticale
+    for (let i = 0; i < images.length; i += 3) {
+        const [basePage] = await finalPdf.copyPages(basePdf, [0]); // copia pagina template
+        finalPdf.addPage(basePage);
 
-      let embeddedImg;
-      const imgType = imgInput.files[0].type;
-      if (imgType.includes("png")) {
-        embeddedImg = await pdfDoc.embedPng(imgBytes);
-      } else {
-        embeddedImg = await pdfDoc.embedJpg(imgBytes);
-      }
+        const page = finalPdf.getPage(finalPdf.getPageCount()-1);
+        const pageHeight = page.getHeight();
+        const pageWidth = page.getWidth();
 
-      const { width, height } = firstPage.getSize();
-      const imgWidth = 200;
-      const imgHeight = (embeddedImg.height / embeddedImg.width) * imgWidth;
+        for (let j = 0; j < 3 && i+j < images.length; j++) {
+        const pngBytes = await fetch(images[i+j]).then(r => r.arrayBuffer());
+        const pngImage = await finalPdf.embedPng(pngBytes);
+        
+        // dimensione e posizione verticale
+        const imgWidth = pageWidth * 0.8;
+        const imgHeight = (pageHeight / 3) * 0.8;
+        let { width, height } = pngImage.scale(1);
+        // Ora croppo le immagini
+        width = 1440;
+        height = 1080;
+        // fine cropping
+        const x = 20;
+        const y = -10+3*j + pageHeight - (j+1) * (pageHeight / 3) + ((pageHeight / 3) - imgHeight)/2;
+        console.log(width,height); // 1440 1080
 
-      // posizione: 50 px da sinistra, 50 px dal basso
-      firstPage.drawImage(embeddedImg, {
-        x: 50,
-        y: height - imgHeight - 50,
-        width: imgWidth,
-        height: imgHeight
-      });
+        page.drawImage(pngImage, {x, y, width: width/6, height: height/6});
+        }
+    }
 
-      const newPdfBytes = await pdfDoc.save();
-      const blob = new Blob([newPdfBytes], { type: 'application/pdf' });
-
-      downloadLink.href = URL.createObjectURL(blob);
-      downloadLink.download = 'output.pdf';
-      downloadLink.style.display = 'inline';
-      downloadLink.textContent = 'Scarica il nuovo PDF';
-    });
+    const pdfBytes = await finalPdf.save();
+    saveAs(new Blob([pdfBytes], {type: 'application/pdf'}), "slide.pdf");
+    }
   </script>
+
 </body>
 </html>
