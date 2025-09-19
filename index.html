@@ -6,27 +6,96 @@
   <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.14.305/pdf.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/FileSaver.js/2.0.5/FileSaver.min.js"></script>
+  <style>
+    /* Stile globale */
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      background: #f0f2f5;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+
+    /* Contenitore centrale */
+    .container {
+      background: #ffffff;
+      padding: 40px 50px;
+      border-radius: 12px;
+      box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+      text-align: center;
+      max-width: 400px;
+      width: 100%;
+    }
+
+    h2 {
+      margin-bottom: 30px;
+      color: #333333;
+    }
+
+    /* Input file */
+    input[type="file"] {
+      display: block;
+      margin: 15px auto;
+      padding: 8px;
+      width: 100%;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: border 0.2s, box-shadow 0.2s;
+    }
+
+    input[type="file"]:hover {
+      border-color: #007bff;
+      box-shadow: 0 0 5px rgba(0,123,255,0.5);
+    }
+
+    /* Bottone */
+    button {
+      margin-top: 20px;
+      padding: 12px 25px;
+      background-color: #007bff;
+      color: #fff;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: background 0.3s, transform 0.2s;
+    }
+
+    button:hover {
+      background-color: #0056b3;
+      transform: translateY(-2px);
+    }
+  </style>
 </head>
 <body>
-  <h2>Genera PsDF</h2>
-  <label>PDF base: <input type="file" id="base" accept="application/pdf"></label><br><br>
-  <label>PDF immagini: <input type="file" id="imgs" accept="application/pdf"></label><br><br>
-  <button onclick="process()">Crea PDF</button>
+  <div class="container">
+    <h2>Genera PDF</h2>
+    <label>PDF base:
+      <input type="file" id="base" accept="application/pdf">
+    </label>
+    <label>PDF immagini:
+      <input type="file" id="imgs" accept="application/pdf">
+    </label>
+    <button onclick="process()">Crea PDF</button>
+  </div>
 
   <script>
     async function process() {
-    const baseFile = document.getElementById('base').files[0];
-    const imgFile  = document.getElementById('imgs').files[0];
-    if (!baseFile || !imgFile) return alert("Carica entrambi i file");
+      const baseFile = document.getElementById('base').files[0];
+      const imgFile  = document.getElementById('imgs').files[0];
+      if (!baseFile || !imgFile) return alert("Carica entrambi i file");
 
-    const baseBytes = await baseFile.arrayBuffer();
-    const basePdf = await PDFLib.PDFDocument.load(baseBytes);
-    const finalPdf = await PDFLib.PDFDocument.create();
+      const baseBytes = await baseFile.arrayBuffer();
+      const basePdf = await PDFLib.PDFDocument.load(baseBytes);
+      const finalPdf = await PDFLib.PDFDocument.create();
 
-    // Estrazione immagini dal PDF immagini
-    const pdfImg = await pdfjsLib.getDocument({url: URL.createObjectURL(imgFile)}).promise;
-    const images = [];
-    for (let i = 1; i <= pdfImg.numPages; i++) {
+      // Estrazione immagini dal PDF immagini
+      const pdfImg = await pdfjsLib.getDocument({url: URL.createObjectURL(imgFile)}).promise;
+      const images = [];
+      for (let i = 1; i <= pdfImg.numPages; i++) {
         const page = await pdfImg.getPage(i);
         const viewport = page.getViewport({scale: 2});
         const canvas = document.createElement('canvas');
@@ -34,10 +103,10 @@
         canvas.height = viewport.height;
         await page.render({canvasContext: canvas.getContext('2d'), viewport}).promise;
         images.push(canvas.toDataURL());
-    }
+      }
 
-    // Per ogni 3 immagini, crea una pagina e mettile in verticale
-    for (let i = 0; i < images.length; i += 3) {
+      // Per ogni 3 immagini, crea una pagina e mettile in verticale
+      for (let i = 0; i < images.length; i += 3) {
         const [basePage] = await finalPdf.copyPages(basePdf, [0]); // copia pagina template
         finalPdf.addPage(basePage);
 
@@ -46,29 +115,26 @@
         const pageWidth = page.getWidth();
 
         for (let j = 0; j < 3 && i+j < images.length; j++) {
-        const pngBytes = await fetch(images[i+j]).then(r => r.arrayBuffer());
-        const pngImage = await finalPdf.embedPng(pngBytes);
-        
-        // dimensione e posizione verticale
-        const imgWidth = pageWidth * 0.8;
-        const imgHeight = (pageHeight / 3) * 0.8;
-        let { width, height } = pngImage.scale(1);
-        // Ora croppo le immagini
-        width = 1440;
-        height = 1080;
-        // fine cropping
-        const x = 20;
-        const y = -10+3*j + pageHeight - (j+1) * (pageHeight / 3) + ((pageHeight / 3) - imgHeight)/2;
-        console.log(width,height); // 1440 1080
-
-        page.drawImage(pngImage, {x, y, width: width/6, height: height/6});
+          const pngBytes = await fetch(images[i+j]).then(r => r.arrayBuffer());
+          const pngImage = await finalPdf.embedPng(pngBytes);
+          // dimensione e posizione verticale
+          const imgWidth = pageWidth * 0.8;
+          const imgHeight = (pageHeight / 3) * 0.8;
+          let { width, height } = pngImage.scale(1);
+          // Ora croppo le immagini
+          width = 1440;
+          height = 1080;
+          // fine cropping
+          const x = 20;
+          // se i == 0, mette -15, altrimenti -2
+          const y = (i == 0 ? -15 : 2) + 25*j + pageHeight - (j+1) * (pageHeight / 3) + ((pageHeight / 3) - imgHeight)/2;
+          page.drawImage(pngImage, {x, y, width: width/6.5, height: height/6.5});
         }
-    }
+      }
 
-    const pdfBytes = await finalPdf.save();
-    saveAs(new Blob([pdfBytes], {type: 'application/pdf'}), "slide.pdf");
+      const pdfBytes = await finalPdf.save();
+      saveAs(new Blob([pdfBytes], {type: 'application/pdf'}), "slide.pdf");
     }
   </script>
-
 </body>
 </html>
