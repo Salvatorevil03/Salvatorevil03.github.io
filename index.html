@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <title>PDF + Immagine (client)</title>
+  <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
+</head>
+<body>
+  <h2>Carica un PDF e un’immagine</h2>
+
+  <p>
+    <label>PDF:
+      <input type="file" id="pdfFile" accept="application/pdf">
+    </label>
+  </p>
+
+  <p>
+    <label>Immagine:
+      <input type="file" id="imgFile" accept="image/*">
+    </label>
+  </p>
+
+  <button id="processBtn">Elabora</button>
+  <br><br>
+  <a id="downloadLink" style="display:none;">Scarica il nuovo PDF</a>
+
+  <script>
+    const pdfInput = document.getElementById('pdfFile');
+    const imgInput = document.getElementById('imgFile');
+    const processBtn = document.getElementById('processBtn');
+    const downloadLink = document.getElementById('downloadLink');
+
+    processBtn.addEventListener('click', async () => {
+      if (!pdfInput.files[0] || !imgInput.files[0]) {
+        alert("Seleziona sia il PDF che l'immagine.");
+        return;
+      }
+
+      const pdfBytes = await pdfInput.files[0].arrayBuffer();
+      const imgBytes = await imgInput.files[0].arrayBuffer();
+
+      const pdfDoc = await PDFLib.PDFDocument.load(pdfBytes);
+      const firstPage = pdfDoc.getPage(0);
+
+      let embeddedImg;
+      const imgType = imgInput.files[0].type;
+      if (imgType.includes("png")) {
+        embeddedImg = await pdfDoc.embedPng(imgBytes);
+      } else {
+        embeddedImg = await pdfDoc.embedJpg(imgBytes);
+      }
+
+      const { width, height } = firstPage.getSize();
+      const imgWidth = 200;
+      const imgHeight = (embeddedImg.height / embeddedImg.width) * imgWidth;
+
+      // posizione: 50 px da sinistra, 50 px dal basso
+      firstPage.drawImage(embeddedImg, {
+        x: 50,
+        y: height - imgHeight - 50,
+        width: imgWidth,
+        height: imgHeight
+      });
+
+      const newPdfBytes = await pdfDoc.save();
+      const blob = new Blob([newPdfBytes], { type: 'application/pdf' });
+
+      downloadLink.href = URL.createObjectURL(blob);
+      downloadLink.download = 'output.pdf';
+      downloadLink.style.display = 'inline';
+      downloadLink.textContent = 'Scarica il nuovo PDF';
+    });
+  </script>
+</body>
+</html>
